@@ -1,0 +1,9 @@
+# Normalize every text file to LF in the repository, and check it out as LF on
+# all platforms, so tooling (prettier, rustfmt) behaves the same on Windows,
+# macOS and Linux regardless of the local core.autocrlf setting.
+* text=auto eol=lf
+
+# Binary assets: never convert line endings
+*.png binary
+*.ico binary
+*.icns binary
