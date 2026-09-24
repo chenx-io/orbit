@@ -821,7 +821,7 @@ pub async fn execute_pipeline(
             passed_anchor = true;
             let started = std::time::Instant::now();
             // Overlay temp variables written by pre-anchor actions onto the variable space (the per-request scope of `pm.variables.set`)
-            let interp_vars = overlay(vars.clone(), &pre_run.temp_vars_set);
+            let interp_vars = overlay(merged_vars(env, vars, &action_vars), &pre_run.temp_vars_set);
             if let Err(e) = run_interpolate_node(
                 rt,
                 StageRequest {

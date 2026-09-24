@@ -676,3 +676,39 @@ async fn dangling_ref_logs_error_without_aborting_request() {
     assert!(outcome.pre_action_logs[2].ok);
     assert_eq!(outcome.vars_set.get("after").map(String::as_str), Some("1"));
 }
+
+/// Regression: **environment variables** must be visible to the interpolation node.
+///
+/// `base_url` is conventionally kept in the active environment rather than in the request variable space, so a URL
+/// like `{{base_url}}/users/{id}` used to stay un-interpolated: the raw `{{base_url}}` then reached the protocol
+/// client as a relative URL and the send failed with "Invalid URL: relative URL without a base".
+#[tokio::test]
+async fn env_variable_in_url_template_is_interpolated() {
+    use orbit_engine::request_build::RequestTemplate;
+
+    let template = RequestTemplate {
+        url: "{{base_url}}/users/{id}".into(),
+        path_params: vec![("id".into(), "{{userId}}".into())],
+        ..Default::default()
+    };
+
+    let spec = PipelineSpec {
+        protocol: "http".into(),
+        operation: "GET".into(),
+        request_template: Some(template),
+        ..Default::default()
+    };
+
+    // `base_url` comes from the environment; `userId` from the request variable space
+    let mut vars: HashMap<String, String> = HashMap::new();
+    vars.insert("userId".to_string(), "42".to_string());
+    let mut env: HashMap<String, String> = HashMap::new();
+    env.insert("base_url".to_string(), "http://127.0.0.1:1".to_string());
+    let cancel = CancellationToken::new();
+    let outcome =
+        execute_pipeline(&mut rt_with_codec(), spec, &mut vars, &env, &cancel, None).await;
+
+    // The environment variable is interpolated, so the URL becomes absolute; the target is unreachable, which is
+    // irrelevant here - the assertions are on the request that was built.
+    assert_eq!(outcome.request.target, "http://127.0.0.1:1/users/42");
+}

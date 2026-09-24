@@ -31,3 +31,7 @@ web/src-tauri/gen/
 
 # Playwright CLI artifacts
 web/.playwright-cli/
+
+# Local build logs
+/build-*.log
+/build-*.err
