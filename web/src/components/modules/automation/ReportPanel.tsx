@@ -17,13 +17,12 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { ScenarioRunRecord } from "@/data/types";
 import {
-  filterSteps,
   ResultFilterBar,
   RunMetricsBar,
   StepList,
-  type ResultFilterValue,
   type RunMetrics,
 } from "./RunResultView";
+import { filterSteps, type ResultFilterValue } from "./stepFilter";
 
 const TYPE_ICON = {
   case: FileCode2,

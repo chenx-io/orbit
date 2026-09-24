@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { ScenarioRunStep } from "@/data/types";
+import type { ResultFilterValue } from "./stepFilter";
 
 /** Run metrics (shared shape between live progress and history report) */
 export interface RunMetrics {
@@ -27,8 +28,6 @@ export interface RunMetrics {
   /** Total assertion count */
   assertCount: number;
 }
-
-export type ResultFilterValue = "all" | "pass" | "fail";
 
 function fmtMs(ms: number): string {
   if (!ms || ms < 0) return "0ms";
@@ -107,15 +106,6 @@ export function ResultFilterBar({
       </TabsList>
     </Tabs>
   );
-}
-
-export function filterSteps(
-  steps: ScenarioRunStep[],
-  f: ResultFilterValue,
-): ScenarioRunStep[] {
-  if (f === "pass") return steps.filter((s) => s.status === "pass");
-  if (f === "fail") return steps.filter((s) => s.status === "fail");
-  return steps;
 }
 
 /** Request/response detail card (expands when request details are recorded) */
