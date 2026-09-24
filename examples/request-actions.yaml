@@ -1,0 +1,73 @@
+# 前后置「动作列表」示例：只读数据库取数 → 脚本改写请求 → 断言。
+#
+# 前置动作是**单一有序列表**，内置一个「插值」节点（`type: interpolate`）划分执行时机：
+#   - 节点**之前**：插值前动作，作用于未插值的请求模板 —— 可写变量供紧随其后的
+#     插值阶段消费（造随机数据 / 计算签名参数），改写结果仍会被插值；
+#   - 节点**之后**：插值后动作，作用于最终报文 —— 改写即最终字节，适合签名 / 加密。
+# 内置节点由系统维护：不可编辑 / 删除 / 禁用；手写 YAML 省略时补在列表**最前**
+# （存量动作语义＝插值后，保证历史配置零迁移）。
+#
+# 与旧式单个 `pre_script` / `post_script` 字符串字段并存（动作列表为空时回退旧字段）。
+#
+# 运行：
+#   orbit run examples/request-actions.yaml
+name: "request-actions"
+variables:
+  user_id: "1"
+
+scenarios:
+  - name: "取数 → 改写 → 断言"
+    executor: { type: sequential, iterations: 1 }
+    steps:
+      - type: request
+        name: "查询用户并注入鉴权头"
+        # 目标地址不可达时前置动作仍会执行，日志用于定位（本示例按离线校验编写）
+        request:
+          method: GET
+          url: "https://httpbin.org/get"
+          headers:
+            Accept: "application/json"
+        pre_actions:
+          # ── 插值前动作：脚本写入的变量会被紧随其后的插值阶段消费
+          - type: script
+            name: "生成本次请求号"
+            code: |
+              pm.environment.set("requestId", "req-" + pm.variables.get("user_id"));
+          # ── 内置「插值」节点：变量插值 + 请求体组装（不可修改）
+          - type: interpolate
+          # 关系库只读 SQL：`{{var}}` / `${var}` 在查询前完成插值
+          - type: db
+            name: "查询用户信息"
+            datasource: "user-db"
+            sql: "SELECT id, token FROM users WHERE id = '{{user_id}}'"
+            # 多列映射：把结果行的各列写入变量
+            columns:
+              - { column: id, var: dbUserId }
+              - { column: token, var: dbToken }
+          # 被禁用的动作仍保留在配置中，执行时跳过
+          - type: db
+            name: "（已停用）查询缓存"
+            enabled: false
+            datasource: "user-cache"
+            command: "GET"
+            args: ["user:{{user_id}}"]
+            extract_var: "cachedUser"
+          # JS 脚本：读取 DB 动作写入的变量并改写请求头（终点是最终报文）
+          - type: script
+            name: "注入鉴权头"
+            code: |
+              pm.request.headers.upsert({
+                key: "X-Token",
+                value: pm.variables.get("dbToken"),
+              });
+              pm.request.headers.upsert({
+                key: "X-User-Id",
+                value: pm.environment.get("dbUserId"),
+              });
+        post_actions:
+          - type: script
+            name: "校验响应"
+            code: |
+              pm.test("状态码为 200", function () {
+                pm.response.to.have.status(200);
+              });
