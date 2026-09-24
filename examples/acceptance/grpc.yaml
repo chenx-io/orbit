@@ -1,0 +1,76 @@
+# Phase 1 验收：gRPC（Server Reflection + 动态 JSON↔proto）+ 服务端流
+# 前置：cargo run -p orbit-testservers（gRPC 监听 127.0.0.1:18781）
+name: "Acceptance gRPC"
+
+scenarios:
+  - name: "grpc"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      # 一元调用：JSON payload → reflection 动态转 protobuf → 响应转 JSON 断言
+      - name: "grpc_unary"
+        type: request
+        request:
+          url: "http://127.0.0.1:18781"
+          service: "/orbit.accept.Echo/Unary"
+          message: '{"message":"hi","count":1}'
+          message_format: json
+          response_format: json
+        checks:
+          - type: status
+            value: 200
+          - type: jsonpath
+            path: "message"
+            comparator: "equal"
+            expected: "echo:hi"
+
+      # 服务端流式：count=3 → 收到 3 条消息
+      - name: "grpc_server_stream"
+        type: request
+        request:
+          url: "http://127.0.0.1:18781"
+          service: "/orbit.accept.Echo/ServerStream"
+          message: '{"message":"hi","count":3}'
+          message_format: json
+          response_format: json
+          streaming: server_streaming
+        checks:
+          - type: status
+            value: 200
+
+      # 客户端流式：发送 2 条消息 → 服务端统计接收数
+      - name: "grpc_client_stream"
+        type: request
+        request:
+          url: "http://127.0.0.1:18781"
+          service: "/orbit.accept.Echo/ClientStream"
+          message: '{"message":"a","count":1}'
+          message_format: json
+          response_format: json
+          streaming: client_streaming
+        checks:
+          - type: status
+            value: 200
+          - type: jsonpath
+            path: "message"
+            comparator: "equal"
+            expected: "received:1"
+
+      # 双向流式：发送 1 条 → 服务端回显 1 条
+      - name: "grpc_bidi"
+        type: request
+        request:
+          url: "http://127.0.0.1:18781"
+          service: "/orbit.accept.Echo/Bidi"
+          message: '{"message":"x","count":1}'
+          message_format: json
+          response_format: json
+          streaming: bidirectional
+        checks:
+          - type: status
+            value: 200
+          - type: jsonpath
+            path: "message"
+            comparator: "equal"
+            expected: "echo:x"

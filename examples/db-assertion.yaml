@@ -1,0 +1,60 @@
+# DB/Redis 断言端到端示例。
+# 运行前需在数据源模块/配置中注册同名数据源：
+#   - "orders-db"  关系库（MySQL/PostgreSQL/SQLite）
+#   - "cache-redis" Redis
+# 时序对齐 JMeter / HttpRunner：请求 → 变量提取 → 断言（含 DB/Redis）→ 后置脚本，
+# 因此 DB 断言 SQL 可直接引用本次响应提取出的变量（如 {{orderId}}）。
+
+name: "db-assertion-demo"
+variables:
+  base_url: "http://127.0.0.1:8080"
+scenarios:
+  - name: "创建订单后校验落库与缓存"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      - name: "创建订单"
+        type: request
+        request:
+          method: POST
+          url: "{{base_url}}/orders"
+          body:
+            product: "sk-1024"
+            qty: 2
+        checks:
+          # 1) 内置断言：响应状态与业务字段
+          - type: status
+            value: 200
+          - type: jsonpath
+            path: "orderId"
+            comparator: exists
+        extract:
+          # 2) 先提取响应中的 orderId，供下方 DB/Redis 断言 SQL 插值
+          - { name: orderId, from: jsonpath, path: "orderId" }
+          # 3) 请求后数据库断言：订单已落库且状态为 PAID
+          #    异步落库场景可配 retry 轮询等待
+          - type: db
+            meta:
+              name: "订单已落库且状态为 PAID"
+              enabled: true
+            datasource: "orders-db"
+            sql: "SELECT status FROM orders WHERE id = '{{orderId}}'"
+            target: { type: cell, row: 0, column: "status" }
+            comparator: equal
+            expected: "PAID"
+            retry: { interval_ms: 500, max_attempts: 10, timeout_ms: 5000 }
+            extract_var: "dbStatus"
+            hard: true
+          # 4) Redis 断言：订单缓存已写入，TTL 不超过 1 小时
+          - type: redis
+            meta:
+              name: "订单缓存存在且 TTL 合理"
+              enabled: true
+            datasource: "cache-redis"
+            command: TTL
+            args: ["order:{{orderId}}"]
+            comparator: gt
+            expected: "0"
+            retry: { interval_ms: 300, max_attempts: 5 }
+            hard: true

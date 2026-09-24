@@ -1,0 +1,60 @@
+{
+  "id": "com.example.pg",
+  "name": "PostgreSQL Query",
+  "version": "1.0.0",
+  "type": "protocol",
+  "description": "PostgreSQL 查询插件：PG wire 握手 + trust/cleartext/md5/SCRAM-SHA-256 认证 + 简单查询 + JSON 结果。",
+  "entry": "pg_query.wasm",
+  "author": "Orbit",
+  "license": "MIT",
+  "capabilities": {
+    "protocols": ["pg"]
+  },
+  "connectionConfigSchema": {
+    "type": "object",
+    "required": ["host", "port", "username"],
+    "properties": {
+      "host": {
+        "type": "string",
+        "title": "主机",
+        "description": "PostgreSQL 服务器地址",
+        "default": "127.0.0.1"
+      },
+      "port": {
+        "type": "integer",
+        "title": "端口",
+        "description": "PostgreSQL 端口",
+        "default": 5432
+      },
+      "username": {
+        "type": "string",
+        "title": "用户名",
+        "default": "postgres"
+      },
+      "password": {
+        "type": "string",
+        "title": "密码",
+        "default": ""
+      },
+      "database": {
+        "type": "string",
+        "title": "数据库",
+        "default": "postgres"
+      }
+    }
+  },
+  "requestConfigSchema": {
+    "type": "object",
+    "properties": {
+      "sql": {
+        "type": "string",
+        "title": "SQL",
+        "format": "textarea",
+        "description": "要执行的 SQL（如 SELECT 1）"
+      }
+    }
+  },
+  "engines": {
+    "orbit": ">=0.9.0"
+  }
+}

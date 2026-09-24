@@ -1,0 +1,75 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - button: 工作空间
+        - button: 分布式
+        - button: 数据源
+        - generic:
+          - generic:
+            - combobox:
+              - generic: 开发
+            - button
+        - button: Mock
+        - button: AI 助手
+        - button
+        - button
+        - button
+        - button
+      - generic:
+        - complementary:
+          - navigation:
+            - button:
+              - generic: 接口测试
+            - button:
+              - generic: 自动化
+            - button:
+              - generic: 压测
+            - button:
+              - generic: 性能
+            - button:
+              - generic: 历史
+          - generic:
+            - button:
+              - generic: 收起
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - button: 接口集合
+                    - button: 数据模型
+                  - generic:
+                    - button
+                    - button
+                    - button [expanded]
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: 默认空间
+                            - button
+            - separator
+            - generic:
+              - generic: 未打开接口 · 从左侧集合选择或新建
+              - main:
+                - generic: 从左侧接口集合选择一个请求，或点击「+」新建
+          - contentinfo:
+            - generic: 0 接口
+            - generic: 环境：开发
+            - generic: 压测：空闲
+    - region "Notifications alt+T"
+  - menu [ref=e218]:
+    - menuitem "新建集合" [ref=e219]
+    - separator [ref=e220]
+    - menuitem "新建请求" [expanded] [active] [ref=e221]
+    - menu "新建请求" [ref=e226]:
+      - menuitem "HTTP http" [ref=e227]:
+        - generic [ref=e228]: HTTP
+        - generic [ref=e229]: http
+    - menuitem "新建文件夹" [ref=e222]
+    - separator [ref=e223]
+    - menuitem "导入" [ref=e224]

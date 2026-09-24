@@ -1,0 +1,53 @@
+# Phase 1 验收：TCP 自定义二进制协议（长度前缀帧 + 前置编码/后置解码 + 单连接多消息）
+# 前置：cargo run -p orbit-testservers（长度前缀帧服务 127.0.0.1:18787）
+name: "Acceptance TCP Custom Protocol"
+
+scenarios:
+  - name: "tcp-custom"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      - name: "tcp_length_prefix_sequence"
+        type: request
+        request:
+          protocol: tcp
+          url: "127.0.0.1:18787"
+          framing:
+            mode: length_prefix
+            fixed_len: 4
+          messages:
+            # 文本消息：前置脚本拼装「4 字节长度头 + UTF-8 帧体」，后置脚本解码回显
+            - payload: '{"cmd":"echo","data":"hello"}'
+              pre_script: |
+                var b = pm.request.raw;
+                var h = ('00000000' + b.length.toString(16)).slice(-8);
+                pm.request.raw = pm.hex.decode(h) + b;
+              post_script: |
+                var t = pm.utf8.decode(pm.response.raw);
+                if (t !== '{"cmd":"echo","data":"hello"}') { throw new Error('decode mismatch: ' + t); }
+                pm.response.decoded = t;
+
+            # 第二条消息：同一连接上继续收发
+            - payload: '{"cmd":"echo","data":"world"}'
+              pre_script: |
+                var b = pm.request.raw;
+                var h = ('00000000' + b.length.toString(16)).slice(-8);
+                pm.request.raw = pm.hex.decode(h) + b;
+              post_script: |
+                var t = pm.utf8.decode(pm.response.raw);
+                if (t !== '{"cmd":"echo","data":"world"}') { throw new Error('decode mismatch: ' + t); }
+                pm.response.decoded = t;
+              wait_ms: 20
+
+            # 二进制消息：hex 输入，前置脚本加长度头，后置脚本 hex 解码校验
+            - payload: "AA55"
+              payload_type: hex
+              pre_script: |
+                var b = pm.request.raw;
+                var h = ('00000000' + b.length.toString(16)).slice(-8);
+                pm.request.raw = pm.hex.decode(h) + b;
+              post_script: |
+                var hex = pm.hex.encode(pm.response.raw);
+                if (hex.toLowerCase() !== 'aa55') { throw new Error('hex mismatch: ' + hex); }
+                pm.response.decoded = hex;

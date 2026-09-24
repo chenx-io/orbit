@@ -1,0 +1,47 @@
+[package]
+name = "orbit-server"
+version.workspace = true
+license.workspace = true
+edition = "2021"
+repository = "https://github.com/chenx-io/orbit"
+description = "Web API server for Orbit (axum)"
+
+[dependencies]
+orbit-engine = { path = "../orbit-engine" }
+orbit-protocol = { path = "../orbit-protocol" }
+orbit-codec = { path = "../orbit-codec" }
+orbit-config = { path = "../orbit-config" }
+orbit-data = { path = "../orbit-data" }
+orbit-metrics = { path = "../orbit-metrics" }
+orbit-dynamic = { path = "../orbit-dynamic" }
+orbit-js = { path = "../orbit-js" }
+orbit-distributed = { path = "../orbit-distributed" }
+orbit-plugin = { path = "../orbit-plugin" }
+orbit-datasource = { path = "../orbit-datasource" }
+
+axum.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tower-http = { workspace = true, features = ["cors"] }
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+regex.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+async-stream = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-util.workspace = true
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+base64.workspace = true
+hyper.workspace = true
+http-body-util.workspace = true
+bytes.workspace = true
+uuid.workspace = true
+clap.workspace = true
+
+[dev-dependencies]
+tower.workspace = true

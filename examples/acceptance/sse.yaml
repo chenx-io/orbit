@@ -1,0 +1,23 @@
+# Phase 1 验收：SSE 订阅 3 个事件
+# 前置：cargo run -p orbit-testservers（SSE 监听 127.0.0.1:18785）
+name: "Acceptance SSE"
+
+scenarios:
+  - name: "sse"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      - name: "sse_subscribe"
+        type: request
+        request:
+          protocol: sse
+          url: "http://127.0.0.1:18785/sse"
+          headers:
+            Accept: "text/event-stream"
+          max_events: 2
+        checks:
+          - type: jsonpath
+            path: "event_count"
+            comparator: "equal"
+            expected: "2"

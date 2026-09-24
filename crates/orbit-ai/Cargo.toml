@@ -1,0 +1,41 @@
+[package]
+name = "orbit-ai"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Orbit AI capability layer: Provider adapters (OpenAI-compatible / Anthropic), agent loop, tool contracts, credential and session storage (zero UI/Tauri dependencies)"
+edition = "2021"
+
+[dependencies]
+# Domain model (strongly-typed tool argument validation reuses the authoritative model directly)
+orbit-data = { path = "../orbit-data" }
+# Action model (`RequestAction` / `ActionTemplate`): the action-list normalization rules reuse
+# `orbit_config::normalize_pre_actions` - the same source as the engine and frontend, avoiding the skew where
+# "the index the AI sees differs from the index at execution time", which only shows up at runtime.
+orbit-config = { path = "../orbit-config" }
+# Transport: reuses the project's own HTTP stack (TLS / connection pool / per-phase timing) instead of pulling in reqwest
+orbit-protocol = { path = "../orbit-protocol" }
+
+hyper = { workspace = true, features = ["client", "http1", "http2"] }
+http-body-util = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+async-trait = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+jiff = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+# Used by the syntax reference's "anti-drift test" (see src/syntax.rs): the syntax written in the prompt must be accepted by the real implementation.
+orbit-dynamic = { path = "../orbit-dynamic" }
+orbit-assertion = { path = "../orbit-assertion" }
+orbit-js = { path = "../orbit-js" }
+
+[lints]
+workspace = true

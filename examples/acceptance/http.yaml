@@ -1,0 +1,286 @@
+# Phase 1 验收：HTTP 全部特性 + 全部数据格式 + 全部断言类型
+# 前置：cargo run -p orbit-testservers（HTTP 监听 127.0.0.1:18780）
+name: "Acceptance HTTP Full"
+
+scenarios:
+  - name: "http-full"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      # ── 数据格式：JSON / YAML / MsgPack / XML / Form / Protobuf ──
+      - name: "json_get"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/json" }
+        checks:
+          - { type: status, value: 200 }
+          - {
+              type: header,
+              name: "content-type",
+              comparator: "contains",
+              expected: "application/json",
+            }
+          - {
+              type: header,
+              name: "Content-Type",
+              comparator: "contains",
+              expected: "application/json",
+            }
+          - {
+              type: jsonpath,
+              path: "hello",
+              comparator: "equal",
+              expected: "world",
+            }
+          - { type: jsonpath, path: "n", comparator: "equal", expected: "42" }
+          - {
+              type: jmespath,
+              expression: "hello",
+              comparator: "equal",
+              expected: "world",
+            }
+          - type: jsonschema
+            schema: '{"type":"object","required":["hello","n"],"properties":{"hello":{"type":"string"},"n":{"type":"integer"}}}'
+        extract:
+          - { name: greeting, from: jsonpath, path: "hello" }
+
+      - name: "json_post"
+        type: request
+        request:
+          method: POST
+          url: "http://127.0.0.1:18780/echo/json"
+          body: { name: orbit, n: 42 }
+        checks:
+          - {
+              type: jsonpath,
+              path: "echo.name",
+              comparator: "equal",
+              expected: "orbit",
+            }
+          - {
+              type: jsonpath,
+              path: "echo.n",
+              comparator: "equal",
+              expected: "42",
+            }
+
+      - name: "yaml_post"
+        type: request
+        request:
+          method: POST
+          url: "http://127.0.0.1:18780/echo/yaml"
+          body: "name: orbit\nyaml: true\n"
+          payload_format: yaml
+        checks:
+          - {
+              type: jsonpath,
+              path: "echo.name",
+              comparator: "equal",
+              expected: "orbit",
+            }
+          - {
+              type: jsonpath,
+              path: "echo.yaml",
+              comparator: "equal",
+              expected: "true",
+            }
+
+      - name: "msgpack_post"
+        type: request
+        request:
+          method: POST
+          url: "http://127.0.0.1:18780/echo/msgpack"
+          body: { a: 1, b: x }
+          payload_format: msgpack
+          response_format: json
+        checks:
+          - {
+              type: jsonpath,
+              path: "decoded.a",
+              comparator: "equal",
+              expected: "1",
+            }
+          - {
+              type: jsonpath,
+              path: "decoded.b",
+              comparator: "equal",
+              expected: "x",
+            }
+
+      - name: "xml_post"
+        type: request
+        request:
+          method: POST
+          url: "http://127.0.0.1:18780/echo/xml"
+          body: "<a><b>x</b></a>"
+          payload_format: xml
+        checks:
+          - { type: status, value: 200 }
+          - {
+              type: header,
+              name: "content-type",
+              comparator: "contains",
+              expected: "application/xml",
+            }
+          - { type: body_contains, value: "<a><b>x</b></a>" }
+
+      - name: "form_post"
+        type: request
+        request:
+          method: POST
+          url: "http://127.0.0.1:18780/echo/form"
+          body: "a=1&b=x"
+          payload_format: form
+        checks:
+          - {
+              type: header,
+              name: "content-type",
+              comparator: "contains",
+              expected: "x-www-form-urlencoded",
+            }
+          - { type: body_contains, value: "a=1&b=x" }
+
+      - name: "proto_post"
+        type: request
+        request:
+          method: POST
+          url: "http://127.0.0.1:18780/echo/proto"
+          body: "raw-proto-bytes"
+          payload_format: protobuf
+        checks:
+          - { type: status, value: 200 }
+          - {
+              type: header,
+              name: "content-type",
+              comparator: "contains",
+              expected: "application/protobuf",
+            }
+
+      # ── HTTP 特性：重定向 / 压缩 / Cookie / 状态码 / 慢响应 ──
+      - name: "redirect_follow"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/redirect" }
+        checks:
+          - { type: status, value: 200 }
+          - {
+              type: jsonpath,
+              path: "hello",
+              comparator: "equal",
+              expected: "world",
+            }
+
+      - name: "gzip_response"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/gzip" }
+        checks:
+          - {
+              type: jsonpath,
+              path: "compressed",
+              comparator: "equal",
+              expected: "gzip",
+            }
+
+      - name: "brotli_response"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/brotli" }
+        checks:
+          - {
+              type: jsonpath,
+              path: "compressed",
+              comparator: "equal",
+              expected: "brotli",
+            }
+
+      - name: "zstd_response"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/zstd" }
+        checks:
+          - {
+              type: jsonpath,
+              path: "compressed",
+              comparator: "equal",
+              expected: "zstd",
+            }
+
+      - name: "cookie_response"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/setcookie" }
+        checks:
+          - {
+              type: header,
+              name: "set-cookie",
+              comparator: "contains",
+              expected: "session=abc123",
+            }
+
+      - name: "status_204"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/status/204" }
+        checks:
+          - { type: status, value: 204 }
+
+      - name: "status_404"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/status/404" }
+        checks:
+          - { type: status, value: 404 }
+
+      - name: "slow_duration_lt"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/slow?ms=300" }
+        checks:
+          - { type: duration_lt, value: "2s" }
+          - {
+              type: jsonpath,
+              path: "slow",
+              comparator: "equal",
+              expected: "true",
+            }
+
+      # ── 非 JSON 响应断言：HTML / XML / 文本 / 大响应 ──
+      - name: "html_css_selector"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/html" }
+        checks:
+          - {
+              type: css_selector,
+              selector: "#title",
+              comparator: "contains",
+              expected: "Hello HTML",
+            }
+
+      - name: "xml_xpath"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/xml" }
+        checks:
+          - { type: xpath, path: "<root>", comparator: "exists" }
+          - { type: body_contains, value: "orbit" }
+
+      - name: "text_regex"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/text" }
+        checks:
+          - { type: body_contains, value: "hello plain text" }
+          - { type: regex, pattern: "hello \\w+ text" }
+
+      - name: "big_size_lt"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/big" }
+        checks:
+          - { type: size_lt, value: 100000 }
+
+      # ── 请求头回显断言 ──
+      - name: "echo_headers"
+        type: request
+        request:
+          method: POST
+          url: "http://127.0.0.1:18780/echo/headers"
+          headers:
+            X-Custom: "orbit-42"
+        checks:
+          - {
+              type: jsonpath,
+              path: "headers.x-custom",
+              comparator: "equal",
+              expected: "orbit-42",
+            }

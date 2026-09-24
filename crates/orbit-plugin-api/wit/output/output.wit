@@ -1,0 +1,48 @@
+// Orbit output/export plugin ABI (world: output-plugin)
+//
+// Phase 2 (F9): extract "result export" (JSON / CSV / report / webhook push) into a WASM capability.
+// - Receives the result set of one load-test/single-shot run (DataValue) and outputs bytes (the host writes to the export target).
+package orbit:output-plugin;
+
+interface host-log {
+  log: func(level: string, message: string);
+}
+
+interface output {
+  record capability {
+    /// Exporter capability identifier (e.g. "csv")
+    name: string,
+    /// Display name
+    display-name: string,
+    /// Description
+    description: string,
+    /// Whether aggregated results are required (true=load-test aggregate; false=single-shot)
+    needs-aggregate: bool,
+  }
+
+  record export-request {
+    /// JSON-encoded result set (DataValue: array or object)
+    value: string,
+    /// JSON-encoded config (e.g. { "delimiter": "," })
+    options: option<string>,
+    /// Output format hint (e.g. "csv" / "json" / "html")
+    format: string,
+  }
+
+  record export-result {
+    /// Exported bytes (the host writes them to the user-selected export target)
+    bytes: list<u8>,
+    /// Suggested file extension (e.g. "csv")
+    file-extension: string,
+  }
+
+  /// Declare the exporters this plugin supports
+  get-capabilities: func() -> list<capability>;
+  /// Execute the export
+  run: func(req: export-request) -> result<export-result, string>;
+}
+
+world output-plugin {
+  export output;
+  import host-log;
+}

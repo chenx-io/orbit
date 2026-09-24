@@ -1,0 +1,22 @@
+[package]
+name = "orbit-assertion"
+version.workspace = true
+license.workspace = true
+edition = "2021"
+repository = "https://github.com/chenx-io/orbit"
+description = "Powerful assertion engine for Orbit"
+
+[dependencies]
+orbit-codec = { path = "../orbit-codec" }
+async-trait.workspace = true
+tokio = { workspace = true, features = ["time"] }
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+jmespath.workspace = true
+jsonschema = "0.18"
+scraper = "0.20"
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

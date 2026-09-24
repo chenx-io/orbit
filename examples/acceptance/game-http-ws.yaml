@@ -1,0 +1,76 @@
+# Phase 1 验收：游戏项目混合协议用例
+#   HTTP 登录 → 提取 token → WebSocket 带 token 鉴权连接 → TLV + protobuf 消息序列
+#
+# 前置：cargo run -p orbit-testservers
+#   - HTTP 登录：POST http://127.0.0.1:18780/api/auth/login → {"token":"tkn-abc123",...}
+#   - WS 鉴权：ws://127.0.0.1:18788/?token=tkn-abc123（token 错误时握手返回 401）
+name: "Acceptance Game HTTP + WebSocket"
+
+scenarios:
+  - name: "game-login-ws"
+    executor:
+      type: sequential
+      iterations: 1
+    on_error: stop
+    steps:
+      # 1) HTTP 登录：返回 token，用 jsonpath 提取为变量，供下一步 WS 鉴权使用
+      - name: "login"
+        type: request
+        request:
+          method: POST
+          url: "http://127.0.0.1:18780/api/auth/login"
+          headers:
+            Content-Type: "application/json"
+          body: '{"username":"player-01"}'
+        checks:
+          - type: status
+            value: 200
+        extract:
+          - name: token
+            from: jsonpath
+            path: "token"
+
+      # 2) WebSocket：URL 携带 {{token}}（运行时解析），消息序列模拟自定义数据协议：
+      #    帧 = 1 字节 cmd + 2 字节大端长度 + protobuf 负载（前置脚本编码 / 后置脚本解码）
+      - name: "ws_game_session"
+        type: request
+        request:
+          protocol: websocket
+          url: "ws://127.0.0.1:18788/?token={{token}}"
+          close_after: 1
+          messages:
+            # 文本消息：JSON → protobuf 字节（pm.utf8.encode）→ TLV 封帧
+            - payload: '{"cmd":"echo","data":"hello"}'
+              pre_script: |
+                var b = pm.request.body.raw;
+                var pb = pm.utf8.encode(b);
+                var h = ('0000' + pb.length.toString(16)).slice(-4);
+                pm.request.raw = pm.hex.decode('01') + pm.hex.decode(h) + pb;
+              post_script: |
+                var r = pm.response.raw;
+                if (r.length < 3) { throw new Error('short frame'); }
+                var cmd = r.charCodeAt(0);
+                var len = (r.charCodeAt(1) << 8) | r.charCodeAt(2);
+                var text = pm.utf8.decode(r.slice(3, 3 + len));
+                if (cmd !== 1 || text !== '{"cmd":"echo","data":"hello"}') {
+                  throw new Error('tlv mismatch: ' + text);
+                }
+                pm.response.decoded = text;
+              wait_ms: 20
+
+            # 二进制消息：protobuf 字节（hex 输入）→ TLV 封帧
+            - payload: "0a0568656c6c6f"
+              payload_type: hex
+              pre_script: |
+                var pb = pm.request.raw;
+                var h = ('0000' + pb.length.toString(16)).slice(-4);
+                pm.request.raw = pm.hex.decode('02') + pm.hex.decode(h) + pb;
+              post_script: |
+                var r = pm.response.raw;
+                var cmd = r.charCodeAt(0);
+                var len = (r.charCodeAt(1) << 8) | r.charCodeAt(2);
+                var hex = pm.hex.encode(r.slice(3, 3 + len));
+                if (cmd !== 2 || hex.toLowerCase() !== '0a0568656c6c6f') {
+                  throw new Error('tlv mismatch: ' + hex);
+                }
+                pm.response.decoded = hex;

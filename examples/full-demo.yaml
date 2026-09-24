@@ -1,0 +1,86 @@
+# orbit 完整功能示例
+# 运行: orbit run examples/full-demo.yaml --env staging
+
+name: "Full Feature Demo"
+
+environments:
+  - name: staging
+    variables:
+      base_url: "https://httpbin.org"
+      api_key: "demo-key"
+
+variables:
+  base_url: "https://httpbin.org"
+
+scenarios:
+  - name: "Comprehensive API Test"
+    executor:
+      type: constant-vus
+      vus: 3
+      duration: "10s"
+      ramp_up: "2s"
+    steps:
+      # 步骤 1: GET 请求 + 多种断言
+      - name: "get_with_assertions"
+        type: request
+        request:
+          method: GET
+          url: "{{base_url}}/get?name=orbit"
+          headers:
+            Accept: "application/json"
+            X-API-Key: "{{api_key}}"
+        checks:
+          - type: status
+            value: 200
+          - type: duration_lt
+            value: "5s"
+          - type: jsonpath
+            path: "args.name"
+            comparator: "equal"
+            expected: "orbit"
+          - type: header
+            name: "content-type"
+            comparator: "contains"
+            expected: "application/json"
+
+      # 步骤 2: POST JSON + JSON Schema 校验 + 变量提取
+      - name: "post_with_schema_validation"
+        type: request
+        request:
+          method: POST
+          url: "{{base_url}}/post"
+          headers:
+            Content-Type: "application/json"
+          body:
+            name: "orbit"
+            version: "0.1.0"
+            tags:
+              - "rust"
+              - "testing"
+        checks:
+          - type: status
+            value: 200
+          - type: jsonschema
+            schema: '{"type":"object","properties":{"json":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},"required":["json"]}'
+          - type: jsonpath
+            path: "json.name"
+            comparator: "equal"
+            expected: "orbit"
+        extract:
+          - name: response_url
+            from: jsonpath
+            path: "url"
+
+      # 步骤 3: 使用提取的变量
+      - name: "use_extracted_var"
+        type: request
+        request:
+          method: GET
+          url: "{{base_url}}/get"
+          headers:
+            X-Extracted: "{{response_url}}"
+        checks:
+          - type: status
+            value: 200
+          - type: size_lt
+            value: 50000

@@ -1,0 +1,46 @@
+# Phase 1 验收：裸 TCP echo（read_until_close 帧化）
+# 前置：cargo run -p orbit-testservers（TCP 监听 127.0.0.1:18783）
+name: "Acceptance TCP"
+
+scenarios:
+  - name: "tcp"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      - name: "tcp_echo"
+        type: request
+        request:
+          url: "127.0.0.1:18783"
+          payload: "PING"
+          framing:
+            mode: read_until_close
+        checks:
+          - type: body_contains
+            value: "PING"
+
+      # delimiter 帧化
+      - name: "tcp_delimiter"
+        type: request
+        request:
+          url: "127.0.0.1:18783"
+          payload: "PING\n"
+          framing:
+            mode: delimiter
+            delimiter: "\n"
+        checks:
+          - type: body_contains
+            value: "PING"
+
+      # fixed 帧化
+      - name: "tcp_fixed"
+        type: request
+        request:
+          url: "127.0.0.1:18783"
+          payload: "PING"
+          framing:
+            mode: fixed
+            fixed_len: 4
+        checks:
+          - type: body_contains
+            value: "PING"

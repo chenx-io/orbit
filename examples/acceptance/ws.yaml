@@ -1,0 +1,31 @@
+# Phase 1 验收：WebSocket echo（text 消息）
+# 前置：cargo run -p orbit-testservers（WS 监听 127.0.0.1:18782）
+name: "Acceptance WebSocket"
+
+scenarios:
+  - name: "ws"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      - name: "ws_echo"
+        type: request
+        request:
+          url: "ws://127.0.0.1:18782"
+          message: "hello ws"
+          close_after: 1
+        checks:
+          - type: body_contains
+            value: "hello ws"
+
+      # 二进制消息 echo
+      - name: "ws_binary"
+        type: request
+        request:
+          url: "ws://127.0.0.1:18782"
+          message: "bin-data"
+          message_type: binary
+          close_after: 1
+        checks:
+          - type: body_contains
+            value: "bin-data"

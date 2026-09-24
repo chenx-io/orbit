@@ -1,0 +1,18 @@
+[package]
+name = "orbit-dynamic"
+version.workspace = true
+license.workspace = true
+edition = "2021"
+repository = "https://github.com/chenx-io/orbit"
+description = "Dynamic value engine for Orbit — Apifox-style {{$category.method}} expressions"
+
+[dependencies]
+rand = "0.8"
+uuid = { workspace = true, features = ["v4"] }
+jiff = { workspace = true, features = ["serde"] }
+regex.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

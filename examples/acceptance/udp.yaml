@@ -1,0 +1,19 @@
+# Phase 1 验收：裸 UDP echo
+# 前置：cargo run -p orbit-testservers（UDP 监听 127.0.0.1:18784）
+name: "Acceptance UDP"
+
+scenarios:
+  - name: "udp"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      - name: "udp_echo"
+        type: request
+        request:
+          protocol: udp
+          url: "127.0.0.1:18784"
+          payload: "PING"
+        checks:
+          - type: body_contains
+            value: "PING"

@@ -1,0 +1,18 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Rust side: formatted by rustfmt, not prettier
+src-tauri/
+
+# Generated icon assets
+public/
+
+# Package manager managed files
+pnpm-lock.yaml
+
+# Data fixtures: keep their original layout
+*.yaml
+
+# Browser automation artifacts
+.playwright-cli/

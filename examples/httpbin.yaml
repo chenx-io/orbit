@@ -1,0 +1,58 @@
+# orbit 示例测试计划
+# 运行: orbit run examples/httpbin.yaml
+# 指定环境: orbit run examples/httpbin.yaml --env staging
+# 覆盖 VU: orbit run examples/httpbin.yaml --vus 50
+
+name: "HTTPBin Load Test"
+
+environments:
+  - name: staging
+    variables:
+      base_url: "https://httpbin.org"
+
+variables:
+  base_url: "https://httpbin.org"
+
+scenarios:
+  - name: "HTTPBin Basic Test"
+    executor:
+      type: constant-vus
+      vus: 5
+      duration: "10s"
+      ramp_up: "2s"
+    steps:
+      # Step 1: GET request
+      - name: "get_index"
+        type: request
+        request:
+          method: GET
+          url: "{{base_url}}/get"
+          headers:
+            Accept: "application/json"
+        checks:
+          - type: status
+            value: 200
+          - type: duration_lt
+            value: "5s"
+
+      # Step 2: POST request with body
+      - name: "post_data"
+        type: request
+        request:
+          method: POST
+          url: "{{base_url}}/post"
+          headers:
+            Content-Type: "application/json"
+          body:
+            name: "orbit"
+            version: "0.1.0"
+            message: "Hello from orbit!"
+        checks:
+          - type: status
+            value: 200
+          - type: jsonpath
+            path: "json.name"
+            comparator: "equal"
+            expected: "orbit"
+          - type: duration_lt
+            value: "5s"

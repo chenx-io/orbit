@@ -1,0 +1,50 @@
+// Orbit extractor plugin ABI (world: extractor-plugin)
+//
+// Phase 2 (F8): extract "response extraction" (the source of pm.environment.set / pm.collectionVariables.set)
+// from the script into a reusable WASM capability.
+// - Pure functions; take response bytes/JSON and output some (key, value) pairs for environment variable injection.
+package orbit:extractor-plugin;
+
+interface host-log {
+  log: func(level: string, message: string);
+}
+
+interface extractor {
+  record capability {
+    /// Extractor capability identifier (e.g. "json-path")
+    name: string,
+    /// Display name
+    display-name: string,
+    /// Description
+    description: string,
+  }
+
+  record extract-request {
+    /// JSON-encoded actual value (DataValue, usually the response body)
+    actual: string,
+    /// JSON-encoded config (e.g. { "path": "$.token", "var": "authToken" })
+    options: option<string>,
+    /// JSON-encoded response summary
+    response: option<string>,
+  }
+
+  record extracted {
+    key: string,
+    value: string,
+  }
+
+  record extract-result {
+    /// Extracted variables
+    variables: list<extracted>,
+  }
+
+  /// Declare the extractors this plugin supports
+  get-capabilities: func() -> list<capability>;
+  /// Execute the extraction
+  extract: func(req: extract-request) -> result<extract-result, string>;
+}
+
+world extractor-plugin {
+  export extractor;
+  import host-log;
+}

@@ -1,0 +1,33 @@
+/target
+**/*.rs.bk
+*.swp
+*~
+.DS_Store
+
+.vscode/
+.zed/
+
+# Node / Frontend
+web/node_modules
+web/dist
+
+# Vite / dev 临时产物
+.vite/
+web/*.timestamp-*.mjs
+
+# 本地缓存 / 生成产物（不入库）
+.pnpm-store/
+.codebuddy/
+.workbuddy/
+web/src-tauri/target/
+web/src-tauri/gen/
+
+# 个人 Postman 导出（勿入库）
+*.postman.json
+我的工作空间*
+
+# Local development config (may contain credentials)
+/config/
+
+# Playwright CLI artifacts
+web/.playwright-cli/

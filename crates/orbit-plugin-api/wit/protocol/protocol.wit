@@ -1,0 +1,77 @@
+// Orbit protocol plugin ABI (world: protocol-plugin)
+//
+// Networking and timing belong to the host: plugins implement only protocol semantics (codec/state machine/framing),
+// I/O goes through host-transport (TCP/TLS/pool/timeout cancellation guaranteed by the host).
+package orbit:protocol-plugin;
+
+/// Host transport channel: plugins read/write the network through handles (the host uniformly controls timeout/cancellation/pool)
+interface host-transport {
+  connect: func(target: string, options: string) -> result<u32, string>;
+  send: func(conn: u32, data: list<u8>) -> result<_, string>;
+  recv: func(conn: u32, max-bytes: u64) -> result<list<u8>, string>;
+  close: func(conn: u32) -> result<_, string>;
+}
+
+/// Host metrics: plugins report per-stage timings (consistent with built-in protocols)
+interface host-metrics {
+  record-sample: func(conn: u32, send-ms: u64, ttfb-ms: u64, receive-ms: u64) -> result<_, string>;
+}
+
+/// Host log: plugins output to the host log channel (tracing)
+interface host-log {
+  log: func(level: string, message: string);
+}
+
+/// Protocol plugin exported interface
+interface protocol {
+  record request {
+    target: string,
+    operation: string,
+    metadata: list<tuple<string, string>>,
+    payload: list<u8>,
+    timeout-ms: option<u64>,
+    /// JSON-encoded requestConfigSchema value (message-level parameters)
+    options: option<string>,
+    /// JSON-encoded connectionConfigSchema value (connection config)
+    connection: option<string>,
+  }
+
+  record timing {
+    dns-ms: option<u64>,
+    tcp-ms: option<u64>,
+    tls-ms: option<u64>,
+    send-ms: option<u64>,
+    ttfb-ms: option<u64>,
+    receive-ms: option<u64>,
+    total-ms: u64,
+  }
+
+  record response {
+    status-code: u32,
+    metadata: list<tuple<string, string>>,
+    payload: list<u8>,
+    timings: timing,
+  }
+
+  record capability {
+    /// Protocol id (i.e. the Step.protocol value, e.g. "dubbo")
+    protocol-id: string,
+    display-name: string,
+    supports-streaming: bool,
+    description: string,
+  }
+
+  /// Declare the protocols this plugin supports
+  get-capabilities: func() -> list<capability>;
+  /// Execute one request-response (unary)
+  execute: func(req: request) -> result<response, string>;
+  /// Disconnect the current connection (used by connection-oriented protocols)
+  disconnect: func() -> result<_, string>;
+}
+
+world protocol-plugin {
+  export protocol;
+  import host-transport;
+  import host-metrics;
+  import host-log;
+}

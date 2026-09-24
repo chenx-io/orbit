@@ -1,0 +1,400 @@
+# Orbit Release —— 多平台构建与发布
+#
+# 触发：
+#   - git push --tags     → 打 tag 即发布（主路径）
+#   - workflow_dispatch   → 手动重跑某个版本 / 演练流水线（version 可留空，从 ref 推导）
+#
+# 两个 ref 各管一件事，别混（prepare job 会把它们打进日志）：
+#   - 本 run 的 ref → 决定 workflow 定义从哪来 + 缓存 scope
+#     push tag 时它就是 tag 本身：发布逻辑取自 tag 那个 commit，与分支无关
+#     手动触发时取自你选的 ref（选 main 就是 main 上那份逻辑）
+#   - checkout 的 ref = tag v<version> → 决定构建的代码
+#   两者指向同一个 tag，所以 **tag 打在哪个分支上都行**（本项目就是在 feature 分支上打 tag），
+#   产物永远对应 tag 那个 commit；main 是否已同步都不影响产物。
+#
+# 缓存 scope（决定发布构建能不能吃缓存，重要）：
+#   GitHub 的缓存按 ref 隔离——tag 触发的 run 写下的缓存**只有同一个 tag 才能读**，
+#   不同 tag 之间互不可见（docs.github.com > Dependency caching reference >
+#   Restrictions for accessing a cache）。tag 触发的 run 能读到的，只有
+#   「默认分支作用域」里的缓存。所以：
+#   - push tag 触发（本项目默认）→ 每次发布都是冷编译。这是平台规则，不是配置错，
+#     rust-cache 报 "No cache found" 属于预期（实测 Windows 单次 66 分钟；已靠合并
+#     job、去 cdylib/staticlib、关 thin LTO、不打 MSI 把冷编译时间压下来）。
+#   - 想让发布吃上缓存：把内容合并到默认分支后从 main 手动触发，缓存 scope 就落在 main
+#     （注意 workflow 定义也会变成 main 上那份）。
+#   - 彻底不受 ref 隔离影响的办法：把 sccache 换成 S3/R2/GCS 等外部后端（本文件默认用 GHA）。
+#
+# 构建结构：
+#   CLI 与桌面 App 合并为一个 `build` job（每平台一个），共用 web/src-tauri/target。
+#   两者依赖同一份重图（orbit-cli → orbit-server → orbit-plugin → wasmtime/rquickjs/sqlx），
+#   拆成两个 job 就要在两块 runner 上各编一遍（Windows 实测 50 + 66 分钟）。
+#   合并省的是**总 runner 分钟**（Windows 约省 45 分钟/次），墙钟时间基本不变（两者串行）。
+#   复用前提（不满足就会各编一份，白省）：
+#   1. 两个 workspace 的 [profile.release] 逐字一致（opt-level/lto/strip/panic 等）；
+#   2. 两个 Cargo.lock 里公共依赖的版本一致。
+#   历史上 web/src-tauri/Cargo.lock 曾落后于根 lock（sqlx 0.8.0 vs 0.8.6），导致整个
+#   sqlx 子树编两遍——`cd web/src-tauri && cargo update -p sqlx` 可以把版本对齐。
+#
+# 平台（2026 官方 runner 现状，参考
+#   https://docs.github.com/en/actions/reference/runners/github-hosted-runners）：
+#   - macos-latest = macOS 26 arm64（standard runner，public 免费）
+#     Intel Mac 仅剩收费 larger runner，故不构建
+#   - ubuntu-latest = 24.04 x64；linux arm64 用 ubuntu-24.04-arm（standard，免费）
+#   - windows-latest = Server 2025 x64
+#
+# 产物命名（install.sh / install.ps1 依赖此约定；两者都按后缀匹配，不依赖完整文件名）：
+#   orbit-cli-{os}-{arch}.tar.gz / .zip      —— CLI（含分布式 agent 启动）
+#   windows : Orbit_<ver>_<arch>-setup.exe   —— NSIS 安装包（install.ps1 只消费这一种）
+#   linux   : orbit_<ver>_<arch>.deb / .rpm  —— install.sh 按发行版二选一
+#   macOS   : Orbit_<ver>_<arch>.dmg
+#   SHA256SUMS                               —— install 脚本下载后校验完整性
+#
+# 平台差异化打包由 tauri.{platform}.conf.json 收口（tauri 会在对应平台自动合并）：
+#   tauri.windows.conf.json -> bundle.targets = nsis（不打未使用的 msi，省 WiX 工具链 + 打包时间）
+#   tauri.linux.conf.json   -> bundle.targets = deb + rpm
+#
+# 参考文档：
+#   Tauri v2 GitHub pipelines: https://v2.tauri.app/distribute/pipelines/github/
+#   Tauri v2 Linux 依赖:      https://v2.tauri.app/start/prerequisites/
+#
+# 缓存策略（加速构建，公共仓库缓存免费、超额自动淘汰）：
+#   - Swatinem/rust-cache           缓存 cargo target 目录（增量编译；清单不变时接近全命中）
+#   - mozilla-actions/sccache       对象级编译缓存，cli/tauri 两个 workspace 共享
+#                                   公共依赖（orbit-*、wasmtime、rquickjs 等）的编译产物
+#   - actions/setup-node cache:pnpm 缓存前端依赖 store
+#   - actions/cache                 缓存 tauri bundler 工具链下载（NSIS/linuxdeploy 等）
+#
+#   命中要点：
+#   - rust-cache 的 key 含所有 Cargo.toml/Cargo.lock 的哈希，以及 CARGO_*/RUST_* 前缀
+#     环境变量的值 → 改依赖清单会换 key（应当如此），改版本号不会（版本注入发生在
+#     rust-cache 之后，且注入前的工作区内容每次相同）。
+#   - 仓库总配额默认 10 GB，超额按 LRU 淘汰；7 天未被访问的条目会被自动删除。
+#   - 耗时定位：Actions 页面的 step 级耗时 + 构建后打印的 sccache stats。
+
+name: Release
+
+on:
+  # 主路径：打 tag 推送即发布
+  push:
+    tags: ["v*"]
+  # 备用：手动触发（重跑某个版本、演练流水线）。注意此时 workflow 定义取自所选 ref
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（不带 v 前缀）。留空 = 从触发的 ref 推导（ref 是 tag 时）"
+        required: false
+        type: string
+      publish:
+        description: "是否发布到 GitHub Release（false = 只跑完整构建，不发布）"
+        required: false
+        # 用 choice 而非 boolean：gh 的 -f 传的是字符串，boolean 输入在
+        # -f/-F 两种写法下的类型推断不一致，容易把 false 当成 true。
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ─────────────── 版本 / 发布开关解析 ───────────────
+  # 版本只在这里解析一次，后续 job 统一用 needs.prepare.outputs.*：
+  # 避免把未校验的 input 直接拼进 shell 脚本（脚本注入），也避免非法版本写进 tag/文件名。
+  prepare:
+    name: prepare
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      publish: ${{ steps.parse.outputs.publish }}
+    steps:
+      - name: Resolve version + publish
+        id: parse
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          RAW="$INPUT_VERSION"
+          if [ -z "$RAW" ]; then
+            if [ "$REF_TYPE" != "tag" ]; then
+              echo "::error::没有 version 输入，且当前 ref（$REF_NAME）不是 tag —— 请填 version，或直接从 tag 触发"
+              exit 1
+            fi
+            RAW="$REF_NAME"
+          fi
+          VER="${RAW#v}"   # 容错：允许误带 v 前缀
+          if [[ ! "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::版本号格式非法：'$RAW'（期望 x.y.z，如 0.1.9）"
+            exit 1
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+          # push tag = 发布；手动触发看 publish 输入
+          if [ "$EVENT" = "push" ]; then
+            PUB=true
+          else
+            PUB="${INPUT_PUBLISH:-true}"
+          fi
+          echo "publish=$PUB" >> "$GITHUB_OUTPUT"
+          echo "release version -> v$VER | publish=$PUB | event=$EVENT"
+
+      # 手动触发时校验 tag 存在（push 触发时必然存在）——早失败、少噪音
+      - name: Check tag exists
+        if: github.event_name != 'push'
+        env:
+          VER: ${{ steps.parse.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v$VER"
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::$TAG 不存在。先打 tag 并推送：git tag $TAG && git push origin $TAG"
+            exit 1
+          fi
+          echo "$TAG 存在"
+
+      # 缓存 scope 取 run 的 ref，不是 checkout 的 ref（详见文件头「缓存 scope」）
+      - name: Report refs
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          VER: ${{ steps.parse.outputs.version }}
+        run: |
+          echo "workflow 定义 / 本 run 的 ref: $GITHUB_REF"
+          echo "构建的代码 ref:              refs/tags/v$VER"
+          if [ "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "缓存 scope = $DEFAULT_BRANCH（依赖清单一致时可与后续发布复用）"
+          else
+            echo "::notice::本 run 的 ref 是 $GITHUB_REF，缓存 scope 落在该 ref 上 —— 发布构建大概率是冷编译（属预期，见文件头）。"
+          fi
+
+  # ─────────────── CLI + App 合并构建（每平台一个 job） ───────────────
+  build:
+    name: build ${{ matrix.name }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+      # 两个 workspace 共用同一个 target 目录 → 公共依赖只编一次。
+      # 指向 src-tauri 的 target 而不是另立中性目录：不必赌 tauri-cli 是否尊重
+      # CARGO_TARGET_DIR——它的默认 target 本来就是这里。
+      # 注意两者都产出 target/release/orbit[.exe]，所以 CLI 必须先打包拷走再编 App。
+      CARGO_TARGET_DIR: ${{ github.workspace }}/web/src-tauri/target
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-latest
+            cli_asset: orbit-cli-linux-x86_64.tar.gz
+          - name: linux-aarch64
+            os: ubuntu-24.04-arm
+            cli_asset: orbit-cli-linux-aarch64.tar.gz
+          - name: darwin-aarch64
+            os: macos-latest
+            cli_asset: orbit-cli-darwin-aarch64.tar.gz
+          - name: windows-x86_64
+            os: windows-latest
+            cli_asset: orbit-cli-windows-x86_64.zip
+    steps:
+      # 显式 checkout tag：产物对应 tag 的 commit（可复现），
+      # 而 run 的 ref 仍是默认分支 → 缓存 scope 稳定（详见文件头）
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.prepare.outputs.version }}
+
+      # Windows 构建加速：排除编译产物目录，避免 Defender 实时扫描
+      # （Windows CI 构建显著慢于 Linux/macOS 的主因之一）。
+      # 失败只告警不中断：非管理员 runner 上 Add-MpPreference 会直接被拒，
+      # 旧写法静默吞掉错误，会让人误以为排除已生效。
+      - name: Exclude build dirs from Windows Defender
+        if: runner.os == 'Windows'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $paths = @(
+            "$env:GITHUB_WORKSPACE\target",
+            "$env:GITHUB_WORKSPACE\web\src-tauri\target",
+            "$env:LOCALAPPDATA\tauri",
+            "$env:LOCALAPPDATA\Mozilla\sccache",
+            "$env:USERPROFILE\.cargo"
+          )
+          foreach ($p in $paths) {
+            try {
+              Add-MpPreference -ExclusionPath $p -ErrorAction Stop
+              Write-Host "Defender exclusion ok: $p"
+            } catch {
+              Write-Warning "Defender exclusion FAILED: $p - $($_.Exception.Message)"
+            }
+          }
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
+      # 缓存的就是共用的那个 target 目录（CLI 也编在这里）：一个 job 一份缓存，
+      # 条目数比拆分时少一半，10 GB 配额下更不容易被挤掉。
+      # 注意 rust-cache 只保留「依赖」的产物——CLI 独有的非公共依赖（如 sysinfo）
+      # 可能会被清理掉，下轮重建，属于可接受的取舍。
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: web/src-tauri
+          cache-on-failure: true
+
+      # tauri bundler 工具链（NSIS/linuxdeploy 等下载）缓存
+      - name: Cache tauri bundler tools
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/tauri
+            ~/Library/Caches/tauri
+            ~/AppData/Local/tauri
+          key: tauri-tools-${{ runner.os }}-${{ runner.arch }}
+
+      # 显式指定 pnpm 版本（与 web/package.json 的 packageManager 保持一致）。
+      # 不用 package_json_file：package.json 在 web/ 子目录，且 v6 对该参数有已知问题
+      # （https://github.com/pnpm/action-setup/issues/227）
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.17.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf \
+            rpm
+
+      # 两个 workspace 的版本都从 input 注入：根 Cargo.toml 用完整版本（含预发布后缀，
+      # 各 crate 通过 version.workspace 继承，orbit --version 随之生效）；tauri bundler 的
+      # 文件在 Windows 上降为纯数字
+      - name: Sync version from input
+        shell: bash
+        env:
+          VER_FULL: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          # -i.bak 兼容 macOS BSD sed 与 Linux GNU sed（BSD 的 -i 必须带后缀）
+          sed -i.bak "s/^version = \"0.1.0\"$/version = \"$VER_FULL\"/" Cargo.toml && rm -f Cargo.toml.bak
+          echo "[workspace.package] ->" && grep -A1 '\[workspace.package\]' Cargo.toml
+
+          VER="$VER_FULL"
+          # Windows 安装器的版本字段（NSIS VIProductVersion，以及后续可能恢复的 MSI）
+          # 要求纯数字，且 tauri.conf.json version 必须是合法 semver：
+          # 预发布版本降为 major.minor.patch（0.1.0-alpha.1 -> 0.1.0）
+          if [ "$RUNNER_OS" = "Windows" ] && [[ "$VER" == *-* ]]; then
+            VER="$(printf '%s' "$VER" | cut -d- -f1)"
+            echo "Windows-compatible version -> $VER"
+          fi
+          # tauri.conf.json（bundler 产物名 / 安装包版本用）
+          node -e "const fs=require('fs');const p='web/src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.version=process.argv[1];fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n')" "$VER"
+          # tauri Cargo.toml（crate 版本）
+          sed -i.bak "s/^version = \".*\"$/version = \"$VER\"/" web/src-tauri/Cargo.toml && rm -f web/src-tauri/Cargo.toml.bak
+          echo "tauri.conf.json version -> $(grep -m1 '\"version\"' web/src-tauri/tauri.conf.json)"
+
+      # ── CLI：先编先传（App 构建会覆盖 target/release/orbit[.exe]） ──
+      - name: Build orbit-cli
+        run: cargo build --release -p orbit-cli
+
+      - name: Package orbit-cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pkg
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp "$CARGO_TARGET_DIR/release/orbit.exe" pkg/
+            powershell -Command "Compress-Archive -Path pkg/orbit.exe -DestinationPath ${{ matrix.cli_asset }} -Force"
+          else
+            cp "$CARGO_TARGET_DIR/release/orbit" pkg/
+            tar -czf ${{ matrix.cli_asset }} -C pkg orbit
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.cli_asset }}
+          path: ${{ matrix.cli_asset }}
+
+      - name: Install frontend deps
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      # 各平台只打 install 脚本实际消费的包型（详见文件头与 tauri.{platform}.conf.json）：
+      #   linux   : deb + rpm（=> tauri.linux.conf.json）
+      #   macOS   : all = app + dmg
+      #   windows : nsis（=> tauri.windows.conf.json，不再打无消费方的 msi）
+      - name: Build tauri app
+        working-directory: web
+        run: pnpm tauri:build
+
+      # 诊断用：确认 sccache/缓存到底命中了多少。首次按新流程跑（默认分支 scope）
+      # 应该是 miss，第二次及以后应接近全命中。定位完可删除本步骤。
+      - name: sccache stats
+        if: always()
+        continue-on-error: true
+        run: sccache --show-stats
+
+      - name: Archive mac .app (directory -> tar.gz)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd web/src-tauri/target/release/bundle/macos
+          tar -czf Orbit.app.tar.gz Orbit.app
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tauri-${{ matrix.name }}
+          # msi 已取消（install.ps1 只消费 -setup.exe）；如需恢复，
+          # 从 tauri.windows.conf.json 的 targets 加回 "msi" 并在下方补 bundle/msi/*.msi
+          path: |
+            web/src-tauri/target/release/bundle/deb/*.deb
+            web/src-tauri/target/release/bundle/rpm/*.rpm
+            web/src-tauri/target/release/bundle/macos/*.dmg
+            web/src-tauri/target/release/bundle/macos/Orbit.app.tar.gz
+            web/src-tauri/target/release/bundle/nsis/*.exe
+
+  # ─────────────────────── 发布 Release ───────────────────────
+  release:
+    name: Publish release
+    if: needs.prepare.outputs.publish == 'true'
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # 生成 SHA256SUMS，install.sh / install.ps1 下载产物后核对完整性
+      - name: Generate SHA256SUMS
+        working-directory: artifacts
+        shell: bash
+        run: |
+          find . -type f ! -name SHA256SUMS -exec sha256sum {} + \
+            | sed 's|^\./||' | sort -k2 > SHA256SUMS
+          echo "--- SHA256SUMS ---" && cat SHA256SUMS
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ needs.prepare.outputs.version }}
+          files: artifacts/**
+          generate_release_notes: true

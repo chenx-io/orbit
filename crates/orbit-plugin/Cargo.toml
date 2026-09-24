@@ -1,0 +1,29 @@
+[package]
+name = "orbit-plugin"
+version.workspace = true
+license.workspace = true
+edition = "2021"
+repository = "https://github.com/chenx-io/orbit"
+description = "WASM plugin system for Orbit"
+
+[dependencies]
+orbit-plugin-api = { path = "../orbit-plugin-api" }
+orbit-plugin-api-native = { path = "../orbit-plugin-api-native" }
+orbit-plugin-native = { path = "../orbit-plugin-native" }
+orbit-protocol = { path = "../orbit-protocol" }
+orbit-codec = { path = "../orbit-codec" }
+
+wasmtime.workspace = true
+wasmtime-wasi = { version = "46" }
+tokio = { workspace = true, features = ["full"] }
+async-trait = "0.1"
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+base64 = { version = "0.22", features = ["alloc"] }
+zip.workspace = true
+
+[dev-dependencies]
+sha2 = "0.10"
+hmac = "0.12"
+pbkdf2 = "0.12"

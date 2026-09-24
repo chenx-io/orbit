@@ -1,0 +1,34 @@
+# orbit 阶梯加压示例
+# 运行: orbit run examples/ramping.yaml
+
+name: "Ramping VUs Load Test"
+
+scenarios:
+  - name: "Step-up load test"
+    executor:
+      type: ramping-vus
+      start_vus: 1
+      stages:
+        - target: 5
+          duration: "10s" # 1→5 VUs, 10 秒
+        - target: 5
+          duration: "10s" # 保持 5 VUs, 10 秒
+        - target: 10
+          duration: "10s" # 5→10 VUs, 10 秒
+        - target: 10
+          duration: "10s" # 保持 10 VUs, 10 秒
+        - target: 1
+          duration: "10s" # 10→1 VUs, 10 秒
+    steps:
+      - name: "get_index"
+        type: request
+        request:
+          method: GET
+          url: "https://httpbin.org/get"
+          headers:
+            Accept: "application/json"
+        checks:
+          - type: status
+            value: 200
+          - type: duration_lt
+            value: "5s"

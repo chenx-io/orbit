@@ -1,0 +1,105 @@
+# orbit 多协议接入示例
+#
+# 运行: orbit run examples/multi-protocol.yaml
+# 前置: cargo run -p orbit-testservers（本地测试服务器：HTTP 18780 / gRPC 18781 /
+#       WS 18782 / TCP 18783 / GraphQL 18786 / SSE 18785）
+#
+# 每个 step 通过 `protocol:` 字段选择协议客户端；不写则自动推断：
+#   - 设了 service（gRPC）      → grpc
+#   - url 以 ws:// wss:// 开头  → websocket
+#   - url 形如 host:port        → tcp
+#   - 否则                     → http
+
+name: "Multi-Protocol Demo"
+
+variables:
+  base_url: "http://127.0.0.1:18780"
+
+scenarios:
+  - name: "mixed-protocols"
+    executor:
+      type: constant-vus
+      vus: 2
+      duration: "10s"
+      ramp_up: "2s"
+    steps:
+      # 1) HTTP —— 默认协议（也可显式写 protocol: http）
+      - name: "http_get"
+        type: request
+        request:
+          method: GET
+          url: "{{base_url}}/json"
+          headers:
+            Accept: "application/json"
+        checks:
+          - type: status
+            value: 200
+
+      # 2) gRPC —— service 路径作为 operation；message 为 JSON，由 GrpcClient 动态转 protobuf
+      #    （本地 orbit-testservers 的 Echo 服务，已开启 Server Reflection）
+      - name: "grpc_unary"
+        type: request
+        request:
+          url: "http://127.0.0.1:18781"
+          service: "/orbit.accept.Echo/Unary"
+          message: '{"message":"hi","count":1}'
+          message_format: json
+          response_format: json
+        checks:
+          - type: status
+            value: 200
+          - type: jsonpath
+            path: "message"
+            comparator: "equal"
+            expected: "echo:hi"
+
+      # 3) WebSocket —— 连接后发送 message 作为文本消息
+      - name: "ws_echo"
+        type: request
+        request:
+          url: "ws://127.0.0.1:18782"
+          message: "hello ws"
+          close_after: 1
+        checks:
+          - type: body_contains
+            value: "hello ws"
+
+      # 4) GraphQL —— query 自动包装为 { query, variables } 的 POST
+      - name: "graphql_query"
+        type: request
+        request:
+          url: "http://127.0.0.1:18786/graphql"
+          query: "{ hello }"
+        checks:
+          - type: jsonpath
+            path: "data.hello"
+            comparator: "equal"
+            expected: "world"
+
+      # 5) 裸 TCP —— url 形如 host:port，发送 payload 并读取响应
+      - name: "tcp_probe"
+        type: request
+        request:
+          url: "127.0.0.1:18783"
+          payload: "PING\n"
+          framing:
+            mode: delimiter
+            delimiter: "\n"
+        checks:
+          - type: body_contains
+            value: "PING"
+
+      # 6) SSE —— 订阅 text/event-stream 并收集事件
+      - name: "sse_subscribe"
+        type: request
+        request:
+          protocol: sse
+          url: "http://127.0.0.1:18785/sse"
+          headers:
+            Accept: "text/event-stream"
+          max_events: 2
+        checks:
+          - type: jsonpath
+            path: "event_count"
+            comparator: "equal"
+            expected: "2"

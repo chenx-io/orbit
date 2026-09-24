@@ -1,0 +1,38 @@
+[package]
+name = "orbit-distributed"
+version.workspace = true
+license.workspace = true
+edition = "2021"
+repository = "https://github.com/chenx-io/orbit"
+description = "Distributed load testing for Orbit — Controller + Agent"
+
+[dependencies]
+orbit-engine = { path = "../orbit-engine" }
+orbit-metrics = { path = "../orbit-metrics" }
+orbit-config = { path = "../orbit-config" }
+orbit-protocol = { path = "../orbit-protocol" }
+orbit-codec = { path = "../orbit-codec" }
+orbit-js = { path = "../orbit-js" }
+
+tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_yaml.workspace = true
+hdrhistogram = { version = "7", features = ["serialization"] }
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+base64 = { version = "0.22", features = ["alloc"] }
+
+# gRPC reporting channel (controller server + agent client)
+tonic = { workspace = true }
+tonic-prost = "0.14"
+prost = { workspace = true }
+futures-util = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+sysinfo = "0.33"
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+protoc-bin-vendored.workspace = true

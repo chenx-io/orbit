@@ -1,0 +1,37 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5"/>
+      <stop offset="100%" style="stop-color:#6366F1"/>
+    </linearGradient>
+    <linearGradient id="orbitGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#C7D2FE"/>
+      <stop offset="100%" style="stop-color:#A5B4FC"/>
+    </linearGradient>
+    <linearGradient id="orbitGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E0E7FF"/>
+      <stop offset="100%" style="stop-color:#C7D2FE"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 圆角矩形背景 -->
+  <rect x="10" y="10" width="180" height="180" rx="40" fill="url(#bgGrad)"/>
+
+  <!-- 外轨道 -->
+  <ellipse cx="100" cy="100" rx="72" ry="48" fill="none" stroke="url(#orbitGrad1)" stroke-width="10" stroke-linecap="round" transform="rotate(-15 100 100)" opacity="0.6"/>
+
+  <!-- 中轨道 -->
+  <ellipse cx="100" cy="100" rx="56" ry="34" fill="none" stroke="url(#orbitGrad2)" stroke-width="12" stroke-linecap="round" transform="rotate(20 100 100)"/>
+
+  <!-- 内轨道 -->
+  <ellipse cx="100" cy="100" rx="36" ry="20" fill="none" stroke="#E0E7FF" stroke-width="8" stroke-linecap="round" transform="rotate(-8 100 100)" opacity="0.8"/>
+
+  <!-- 数据核心 -->
+  <circle cx="100" cy="100" r="18" fill="#FFFFFF">
+    <animate attributeName="r" values="18;22;18" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="1;0.85;1" dur="2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- 核心内点 -->
+  <circle cx="100" cy="100" r="8" fill="#4F46E5"/>
+</svg>

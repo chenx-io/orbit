@@ -1,0 +1,92 @@
+# Phase 1 验收：前置/后置脚本、变量提取、动态值、流程控制（setvar/loop/condition/group/wait）
+name: "Acceptance Scripts and Flow"
+
+scenarios:
+  - name: "scripts-and-flow"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      # 前置脚本：改写请求头
+      - name: "pre_script_headers"
+        type: request
+        request:
+          method: POST
+          url: "http://127.0.0.1:18780/echo/headers"
+          headers: {}
+        pre_script: |
+          pm.request.headers.set('X-Script', 'yes');
+          pm.request.headers.set('X-Id', '42');
+        checks:
+          - { type: jsonpath, path: "headers.x-script", comparator: "equal", expected: "yes" }
+          - { type: jsonpath, path: "headers.x-id", comparator: "equal", expected: "42" }
+
+      # 后置脚本：校验响应不抛错
+      - name: "post_script_ok"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/json" }
+        post_script: |
+          if (response.status !== 200) { throw new Error('bad status'); }
+        checks:
+          - { type: status, value: 200 }
+
+      # 变量提取（jsonpath / header / regex）
+      - name: "extract_vars"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/json" }
+        extract:
+          - { name: greeting, from: jsonpath, path: "hello" }
+          - { name: text_match, from: regex, pattern: "(world)", group: 1 }
+
+      # setvar + 动态值插值
+      - name: "setvar_use"
+        type: setvar
+        key: "base"
+        value: "http://127.0.0.1:18780"
+
+      - name: "dynamic_value_url"
+        type: request
+        request:
+          method: GET
+          url: "{{base}}/json?uuid={{$string.uuid}}&ts={{$date.timestamp}}"
+        checks:
+          - { type: status, value: 200 }
+
+      # 条件分支
+      - name: "condition_true"
+        type: condition
+        expression: "{{greeting}} == world"
+        then:
+          - name: "then_hit"
+            type: request
+            request: { method: GET, url: "{{base}}/json" }
+            checks:
+              - { type: status, value: 200 }
+        else:
+          - name: "else_hit"
+            type: request
+            request: { method: GET, url: "{{base}}/status/500" }
+
+      # 循环（2 次）+ 循环变量
+      - name: "loop_twice"
+        type: loop
+        count: 2
+        steps:
+          - name: "loop_req"
+            type: request
+            request: { method: GET, url: "{{base}}/json?i={{loop.index}}" }
+            checks:
+              - { type: status, value: 200 }
+
+      # 分组 + 等待
+      - name: "group_block"
+        type: group
+        steps:
+          - name: "group_wait"
+            type: wait
+            duration: "0.1s"
+          - name: "group_req"
+            type: request
+            request: { method: GET, url: "{{base}}/json" }
+            checks:
+              - { type: status, value: 200 }

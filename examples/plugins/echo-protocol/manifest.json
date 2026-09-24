@@ -1,0 +1,46 @@
+{
+  "id": "com.example.echo",
+  "name": "Echo Protocol",
+  "version": "1.0.0",
+  "type": "protocol",
+  "description": "回显入参的协议桩，用于演示 orbit 插件链路（zip 安装 + 动态表单 + 执行）。",
+  "entry": "echo.wasm",
+  "author": "Orbit",
+  "license": "MIT",
+  "capabilities": {
+    "protocols": ["echo"]
+  },
+  "connectionConfigSchema": {
+    "type": "object",
+    "required": ["prefix"],
+    "properties": {
+      "prefix": {
+        "type": "string",
+        "title": "回显前缀",
+        "description": "拼接到响应 payload 开头的文本前缀",
+        "default": "echo>"
+      },
+      "mode": {
+        "type": "string",
+        "title": "模式",
+        "description": "回显模式",
+        "enum": ["plain", "metadata", "both"],
+        "default": "both"
+      }
+    }
+  },
+  "requestConfigSchema": {
+    "type": "object",
+    "properties": {
+      "separator": {
+        "type": "string",
+        "title": "分隔符",
+        "description": "metadata 连接分隔符",
+        "default": ","
+      }
+    }
+  },
+  "engines": {
+    "orbit": ">=0.9.0"
+  }
+}

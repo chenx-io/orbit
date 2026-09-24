@@ -1,0 +1,33 @@
+[package]
+name = "orbit-cli"
+version.workspace = true
+license.workspace = true
+edition = "2021"
+repository = "https://github.com/chenx-io/orbit"
+description = "Orbit CLI — All-in-one API testing toolkit"
+
+# Brand name Orbit: the executable is named orbit (`orbit run <file>` / `orbit agent ...`)
+[[bin]]
+name = "orbit"
+path = "src/main.rs"
+
+[dependencies]
+orbit-engine = { path = "../orbit-engine" }
+orbit-protocol = { path = "../orbit-protocol" }
+orbit-codec = { path = "../orbit-codec" }
+orbit-config = { path = "../orbit-config" }
+orbit-output = { path = "../orbit-output" }
+orbit-metrics = { path = "../orbit-metrics" }
+orbit-server = { path = "../orbit-server" }
+orbit-data = { path = "../orbit-data" }
+orbit-distributed = { path = "../orbit-distributed" }
+sysinfo = "0.33"
+
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+serde_yaml.workspace = true
+serde_json.workspace = true
+url.workspace = true

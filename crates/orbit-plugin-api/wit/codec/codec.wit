@@ -1,0 +1,43 @@
+// Orbit codec plugin ABI (world: codec-plugin)
+//
+// Pure functions, no network: values cross the boundary as JSON strings (aligned with orbit-codec::types::DataValue).
+package orbit:codec-plugin;
+
+interface host-log {
+  log: func(level: string, message: string);
+}
+
+interface codec {
+  record capability {
+    /// Format name (i.e. the string value of CodecKind, e.g. "avro")
+    codec-name: string,
+    mime-types: list<string>,
+    display-name: string,
+  }
+
+  record encode-request {
+    /// JSON-encoded DataValue
+    value: string,
+    options: option<string>,
+  }
+  record encode-result {
+    bytes: list<u8>,
+  }
+  record decode-request {
+    bytes: list<u8>,
+    options: option<string>,
+  }
+  record decode-result {
+    value: string,
+  }
+
+  /// Declare the formats this plugin supports
+  get-capabilities: func() -> list<capability>;
+  encode: func(req: encode-request) -> result<encode-result, string>;
+  decode: func(req: decode-request) -> result<decode-result, string>;
+}
+
+world codec-plugin {
+  export codec;
+  import host-log;
+}

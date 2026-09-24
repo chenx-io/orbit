@@ -1,0 +1,16 @@
+{
+  "id": "com.example.tsv-codec",
+  "name": "TSV Codec",
+  "version": "1.0.0",
+  "type": "codec",
+  "description": "TSV 编解码桩：JSON DataValue ↔ TSV 文本，用于演示 orbit 编解码插件链路。",
+  "entry": "tsv.wasm",
+  "author": "Orbit",
+  "license": "MIT",
+  "capabilities": {
+    "codecs": ["tsv"]
+  },
+  "engines": {
+    "orbit": ">=0.9.0"
+  }
+}

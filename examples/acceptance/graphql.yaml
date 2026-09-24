@@ -1,0 +1,33 @@
+# Phase 1 验收：GraphQL query
+# 前置：cargo run -p orbit-testservers（GraphQL 监听 127.0.0.1:18786）
+name: "Acceptance GraphQL"
+
+scenarios:
+  - name: "graphql"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      - name: "graphql_query"
+        type: request
+        request:
+          url: "http://127.0.0.1:18786/graphql"
+          query: "{ hello }"
+        checks:
+          - type: jsonpath
+            path: "data.hello"
+            comparator: "equal"
+            expected: "world"
+
+      # 带 variables 的 query
+      - name: "graphql_variables"
+        type: request
+        request:
+          url: "http://127.0.0.1:18786/graphql"
+          query: "query($code: ID!){ country(code: $code) { name } }"
+          variables: '{"code":"CN"}'
+        checks:
+          - type: jsonpath
+            path: "data.country.name"
+            comparator: "equal"
+            expected: "China"

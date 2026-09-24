@@ -1,0 +1,16 @@
+[package]
+name = "status-assertion"
+version = "1.0.0"
+edition = "2021"
+description = "Orbit 示例插件：状态码范围断言（演示二期 assertion-plugin ABI）"
+repository = "https://github.com/chenx-io/orbit"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = "0.30"
+serde_json = "1"
+
+# 示例插件默认不参与 workspace 构建（需 wasm32-wasip2 target）
+[workspace]

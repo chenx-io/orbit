@@ -1,0 +1,88 @@
+[package]
+name = "orbit-protocol"
+version.workspace = true
+license.workspace = true
+edition = "2021"
+repository = "https://github.com/chenx-io/orbit"
+description = "Extensible network protocol abstraction for Orbit"
+
+[dependencies]
+async-trait.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "time"] }
+tokio-util.workspace = true
+bytes.workspace = true
+
+# HTTP stack - custom hyper connector (version unified through the workspace)
+hyper = { workspace = true, features = ["client", "http1", "http2"] }
+hyper-util = { workspace = true, features = [
+    "client-legacy",
+    "http1",
+    "http2",
+    "tokio",
+] }
+http-body-util = { workspace = true }
+hyper-rustls = { version = "0.27", default-features = false, features = [
+    "http1",
+    "http2",
+    "native-tokio",
+    "rustls-native-certs",
+    "tls12",
+    "webpki-tokio",
+    "logging",
+    "ring",
+] }
+rustls = { workspace = true, default-features = false, features = ["ring"] }
+tokio-rustls = { workspace = true, default-features = false, features = [
+    "ring",
+] }
+webpki-roots = { workspace = true }
+http = { workspace = true }
+url.workspace = true
+tracing.workspace = true
+
+# WebSocket
+tokio-tungstenite = { version = "0.24", features = [
+    "rustls-tls-webpki-roots",
+    "tokio-rustls",
+] }
+tungstenite = "0.24"
+futures-util = "0.3"
+
+# gRPC
+tonic = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+prost = { workspace = true, optional = true }
+prost-types = { workspace = true, optional = true }
+protox = { version = "0.8", optional = true }
+orbit-codec = { path = "../orbit-codec" }
+
+serde_json.workspace = true
+serde.workspace = true
+
+# Content encoding (compression / decompression): gzip, deflate, brotli, zstd
+flate2 = "1"
+brotli = "8"
+zstd = "0.13"
+
+base64.workspace = true
+
+[features]
+default = ["grpc"]
+grpc = [
+    "tonic",
+    "tower",
+    "prost",
+    "prost-types",
+    "protox",
+    "dep:prost-build",
+    "dep:protoc-bin-vendored",
+]
+
+[build-dependencies]
+prost-build = { version = "0.14", optional = true }
+protoc-bin-vendored = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+serde_json.workspace = true

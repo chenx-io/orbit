@@ -1,0 +1,16 @@
+{
+  "id": "com.example.status-assertion",
+  "name": "Status Range Assertion",
+  "version": "1.0.0",
+  "type": "assertion",
+  "description": "状态码范围断言插件（二期），用于演示 assertion-plugin 链路。",
+  "entry": "status_assertion.wasm",
+  "author": "Orbit",
+  "license": "MIT",
+  "capabilities": {
+    "assertions": ["status-range"]
+  },
+  "engines": {
+    "orbit": ">=0.9.0"
+  }
+}

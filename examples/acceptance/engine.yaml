@@ -1,0 +1,37 @@
+# Phase 1 验收：执行器（阶梯加压 / 恒定到达率）+ 阈值评估
+name: "Acceptance Executors and Thresholds"
+
+thresholds:
+  - "http_req_duration: p(95) < 5000"
+  - "http_req_failed: rate < 0.5"
+  - "http_reqs: count > 0"
+
+scenarios:
+  - name: "ramping"
+    executor:
+      type: ramping-vus
+      start_vus: 1
+      stages:
+        - { target: 2, duration: "1s" }
+        - { target: 1, duration: "1s" }
+    steps:
+      - name: "ramp_req"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/json" }
+        checks:
+          - { type: status, value: 200 }
+          - { type: jsonpath, path: "hello", comparator: "equal", expected: "world" }
+
+  - name: "arrival"
+    executor:
+      type: constant-arrival-rate
+      rate: 5
+      duration: "2s"
+      ramp_up: "0s"
+      pre_allocated_vus: 2
+    steps:
+      - name: "arrival_req"
+        type: request
+        request: { method: GET, url: "http://127.0.0.1:18780/json" }
+        checks:
+          - { type: status, value: 200 }

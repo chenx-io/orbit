@@ -1,0 +1,53 @@
+// Orbit assertion plugin ABI (world: assertion-plugin)
+//
+// Phase 2 (F8): extract "response assertions" from the pm.test script into a reusable WASM capability.
+// - Pure functions, no network; values cross the boundary as JSON strings (aligned with orbit-codec::types::DataValue).
+// - Along with built-in assertions (status code / JSONPath / body contains), called uniformly after the response stream.
+package orbit:assertion-plugin;
+
+interface host-log {
+  log: func(level: string, message: string);
+}
+
+interface assertion {
+  record capability {
+    /// Assertion capability identifier (e.g. "json-path-equal")
+    name: string,
+    /// Display name
+    display-name: string,
+    /// Description
+    description: string,
+  }
+
+  record assertion-request {
+    /// Assertion name (the assertion being executed, for locating)
+    name: string,
+    /// JSON-encoded actual value (DataValue)
+    actual: string,
+    /// JSON-encoded expected value (optional)
+    expected: option<string>,
+    /// JSON-encoded config (e.g. { "path": "$.code", "op": "eq" })
+    options: option<string>,
+    /// JSON-encoded request summary (method, url, headers, body)
+    request: option<string>,
+    /// JSON-encoded response summary (status, headers, body, timings)
+    response: option<string>,
+  }
+
+  record assertion-result {
+    /// Whether it passed
+    passed: bool,
+    /// Failure/success explanation
+    message: string,
+  }
+
+  /// Declare the assertions this plugin supports
+  get-capabilities: func() -> list<capability>;
+  /// Execute the assertion
+  run: func(req: assertion-request) -> result<assertion-result, string>;
+}
+
+world assertion-plugin {
+  export assertion;
+  import host-log;
+}

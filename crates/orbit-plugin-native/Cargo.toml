@@ -1,0 +1,20 @@
+[package]
+name = "orbit-plugin-native"
+version.workspace = true
+license.workspace = true
+edition = "2021"
+repository = "https://github.com/chenx-io/orbit"
+description = "Orbit dynamic-library (native) network protocol plugin host loader: dlopen + stable ABI calls"
+
+# Dynamic library loading (dlopen) requires unsafe
+[lints.rust]
+unsafe_code = "allow"
+
+[dependencies]
+abi_stable.workspace = true
+libloading.workspace = true
+serde_json.workspace = true
+orbit-plugin-api-native = { path = "../orbit-plugin-api-native" }
+
+[dev-dependencies]
+base64 = "0.22"

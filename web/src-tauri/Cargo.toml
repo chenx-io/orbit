@@ -1,0 +1,70 @@
+[package]
+name = "orbit"
+version = "0.1.0"
+description = "Orbit — All-in-one API testing toolkit"
+authors = ["chenx-dev"]
+license = "AGPL-3.0-or-later"
+edition = "2021"
+
+[lib]
+name = "orbit_lib"
+# 只面向桌面分发：bundler 消费的是 bin（orbit.exe），桌面不需要 staticlib/cdylib——
+# 那是 Tauri 模板给移动端（iOS/Android）留的。留着它们的代价：cdylib 会把整个依赖图
+# 再链接一次（同样是 thin LTO 整图链接），staticlib 会把整图对象归档成一个几百 MB 的
+# .lib（本地 Windows 实测 435 MB）。将来要加移动端时再补回。
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+base64 = "0.22"
+tauri = { version = "2", features = ["tracing", "tray-icon"] }
+tauri-plugin-log = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+jiff = { version = "0.2", features = ["serde"] }
+orbit-dynamic = { path = "../../crates/orbit-dynamic" }
+orbit-js = { path = "../../crates/orbit-js" }
+orbit-protocol = { path = "../../crates/orbit-protocol" }
+orbit-engine = { path = "../../crates/orbit-engine" }
+orbit-server = { path = "../../crates/orbit-server" }
+orbit-config = { path = "../../crates/orbit-config" }
+orbit-data = { path = "../../crates/orbit-data" }
+orbit-assertion = { path = "../../crates/orbit-assertion" }
+orbit-codec = { path = "../../crates/orbit-codec" }
+orbit-metrics = { path = "../../crates/orbit-metrics" }
+orbit-output = { path = "../../crates/orbit-output" }
+orbit-distributed = { path = "../../crates/orbit-distributed" }
+orbit-plugin = { path = "../../crates/orbit-plugin" }
+orbit-datasource = { path = "../../crates/orbit-datasource" }
+orbit-ai = { path = "../../crates/orbit-ai" }
+# 实现 orbit-ai 的 ToolHost / Approver trait 需要
+async-trait = "0.1"
+tokio-util = { version = "0.7", features = ["rt"] }
+serde_yaml = "0.9"
+anyhow = "1"
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "registry"] }
+
+# release 构建优化：src-tauri 是独立 workspace，不继承根 Cargo.toml 的 profile。
+# strip 去符号表（纯体积收益）。
+#
+# lto = false：CI 的 Windows runner 只有 4 vCPU，thin LTO 会让每个依赖都带
+# -C embed-bitcode 编译、并在链接期再做一次整图 LTO——本地 Windows 构建里最慢的就是这段。
+# 代价是包体积约 +15~30%（按本地 62 MB exe 估算），运行时差异很小（重活都在
+# wasmtime/quickjs 内部，跨 crate 边界的 LTO 收益有限）。更在意体积就改回 "thin"。
+#
+# 与根 Cargo.toml 的 [profile.release] **必须逐字一致**（CI 里两个 workspace 共用
+# 同一个 target 目录，profile 不同则指纹不同、公共依赖各编一份）。
+# codegen-units 保持默认（16）：并行编译显著缩短 CI 构建时间
+# （如需极致体积可改 1，编译慢 2~4 倍）。
+[profile.release]
+opt-level = 3
+lto = false
+strip = "symbols"

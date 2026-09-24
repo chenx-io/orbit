@@ -1,0 +1,32 @@
+# Phase 1 验收：WebSocket 自定义数据协议（前置编码/后置解码 + 单连接多消息）
+# 前置：cargo run -p orbit-testservers（WS 监听 127.0.0.1:18782）
+name: "Acceptance WebSocket Custom"
+
+scenarios:
+  - name: "ws-custom"
+    executor:
+      type: sequential
+      iterations: 1
+    steps:
+      - name: "ws_message_sequence"
+        type: request
+        request:
+          protocol: websocket
+          url: "ws://127.0.0.1:18782"
+          close_after: 1
+          messages:
+            - payload: '{"type":"echo","data":"hello"}'
+              pre_script: |
+                pm.request.raw = pm.utf8.encode(pm.request.body.raw);
+              post_script: |
+                var t = pm.utf8.decode(pm.response.raw);
+                if (t !== '{"type":"echo","data":"hello"}') { throw new Error('ws decode mismatch: ' + t); }
+                pm.response.decoded = t;
+
+            - payload: '{"type":"echo","data":"world"}'
+              pre_script: |
+                pm.request.raw = pm.utf8.encode(pm.request.body.raw);
+              post_script: |
+                var t = pm.utf8.decode(pm.response.raw);
+                if (t !== '{"type":"echo","data":"world"}') { throw new Error('ws decode mismatch: ' + t); }
+                pm.response.decoded = t;

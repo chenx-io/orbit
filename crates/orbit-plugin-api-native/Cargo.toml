@@ -1,0 +1,16 @@
+[package]
+name = "orbit-plugin-api-native"
+version.workspace = true
+license = "MIT OR Apache-2.0"
+edition = "2021"
+repository = "https://github.com/chenx-io/orbit"
+description = "Orbit dynamic-library (native) network protocol plugin SDK: stable FFI ABI definitions + plugin-side trait"
+
+# Dynamic library plugin loading/ABI requires unsafe
+[lints.rust]
+unsafe_code = "allow"
+
+[dependencies]
+abi_stable.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
